@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     llm_provider: str = "groq"
     llm_api_key: str = ""
+    llm_model: str = "openai/gpt-oss-20b"
 
     embedding_provider: str = "local"
     vector_db: str = "chroma"
