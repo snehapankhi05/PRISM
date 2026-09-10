@@ -1,6 +1,7 @@
 from backend.app.services.orchestration.specialists.base import SpecialistInput
 from backend.app.services.orchestration.state import PRISMState
 from backend.app.services.orchestration.output_repository import OutputRepository
+from backend.app.services.guardrails.provenance import ProvenanceService
 
 
 def generation_node(
@@ -8,6 +9,7 @@ def generation_node(
     *,
     specialist_registry,
     output_repository: OutputRepository,
+    provenance_service: ProvenanceService,
     db,
 ) -> PRISMState:
 
@@ -15,6 +17,7 @@ def generation_node(
     controls = state.get("controls")
     requested_outputs = state.get("requested_outputs", [])
     job_id = state.get("job_id")
+    source_id = state.get("source_id")
 
     if knowledge_context is None:
         raise ValueError("Knowledge context is required for generation.")
@@ -39,23 +42,22 @@ def generation_node(
 
         generated_outputs[output_type] = output
 
-        content = output.content
+        if job_id and source_id:
+            content = output.content
 
-        if hasattr(content, "model_dump_json"):
-            content = content.model_dump_json()
-        elif not isinstance(content, str):
-            content = str(content)
+            if hasattr(content, "model_dump_json"):
+                content = content.model_dump_json()
+            elif not isinstance(content, str):
+                content = str(content)
 
-        # Persist only when this generation is associated
-        # with a real database Job.
-        if job_id:
-            output_repository.create(
+            output_draft = output_repository.create(
                 db,
                 job_id=job_id,
                 output_type=output_type,
                 content=content,
                 quality_metadata=output.metadata,
             )
+
 
     return {
         **state,

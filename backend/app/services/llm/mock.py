@@ -97,6 +97,13 @@ class MockLLMProvider(LLMProvider):
                 extraction_method="mock",
                 extraction_confidence=1.0,
             )
+        if model_name == "GuardrailResult":
+            return response_model(
+                passed=True,
+                issues=[],
+                revision_required=False,
+                confidence=1.0,
+    )
 
         raise ValueError(
             f"MockLLMProvider does not support response model: {model_name}"

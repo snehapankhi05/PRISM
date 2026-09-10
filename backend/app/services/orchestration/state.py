@@ -12,3 +12,4 @@ class PRISMState(TypedDict, total=False):
     controls: GenerationControls
     requested_outputs: list[str]
     generated_outputs: dict
+    guardrail_results: dict
