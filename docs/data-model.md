@@ -160,3 +160,66 @@ Initial fields:
 - One Source can be referenced by multiple ProvenanceLinks.
 - StyleMemory can be associated with generation workflows when implemented.
 
+## Database Design Decisions
+
+### Primary Keys
+
+All persistent domain entities will use UUID primary keys.
+
+This provides globally unique identifiers and avoids coupling entity identity to database-generated sequential integers.
+
+### JSON Data
+
+PostgreSQL `JSONB` will be used for fields whose structure is intentionally flexible.
+
+Initial JSONB fields:
+
+- `Source.metadata`
+- `FactGraph.graph_data`
+- `FactGraph.extraction_metadata`
+- `Job.controls`
+- `OutputDraft.quality_metadata`
+- `RenderedAsset.metadata`
+- `StyleMemory.style_data`
+
+### Timestamps
+
+Persistent entities will use timezone-aware UTC timestamps.
+
+Initial timestamp fields:
+
+- `created_at`
+- `updated_at`
+
+`created_at` records when the entity was created.
+
+`updated_at` records the most recent modification.
+
+### Foreign Keys
+
+The initial foreign-key relationships are:
+
+- `FactGraph.source_id` → `Source.id`
+- `Job.source_id` → `Source.id`
+- `Job.fact_graph_id` → `FactGraph.id`
+- `OutputDraft.job_id` → `Job.id`
+- `ProvenanceLink.output_draft_id` → `OutputDraft.id`
+- `ProvenanceLink.source_id` → `Source.id`
+- `RenderedAsset.output_draft_id` → `OutputDraft.id`
+
+### Initial Indexes
+
+Indexes will be created for frequently queried relationship and workflow fields.
+
+Initial candidates:
+
+- `FactGraph.source_id`
+- `Job.source_id`
+- `Job.fact_graph_id`
+- `Job.status`
+- `OutputDraft.job_id`
+- `OutputDraft.output_type`
+- `ProvenanceLink.output_draft_id`
+- `ProvenanceLink.source_id`
+- `RenderedAsset.output_draft_id`
+
