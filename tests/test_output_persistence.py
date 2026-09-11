@@ -96,7 +96,10 @@ def test_generated_output_is_persisted(db_session):
         embedding_provider=embedding_provider,
     )
 
-    indexer.index(document)
+    indexer.index(
+    document,
+    source_id=str(source.id),
+)
 
     knowledge_service = KnowledgeService(
         fact_graph_repository=fact_graph_repository,

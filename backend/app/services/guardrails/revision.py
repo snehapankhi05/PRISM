@@ -23,7 +23,7 @@ class BoundedRevisionService:
             return output
 
         facts_text = "\n".join(
-            f"- {fact.object}: {fact.value}"
+            f"- {fact.subject} {fact.predicate} {fact.object}"
             for fact in (verified_facts or [])
         )
 

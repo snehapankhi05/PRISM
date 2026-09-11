@@ -44,7 +44,8 @@ class KnowledgeService:
         evidence = self.retriever.retrieve(
             query,
             top_k=top_k,
-        )
+            source_id=str(source_id),
+)
 
         return KnowledgeContext(
             facts=facts,

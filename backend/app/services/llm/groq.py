@@ -1,19 +1,13 @@
+import json
 from typing import TypeVar
 
 from groq import Groq
 from pydantic import BaseModel
 
 from backend.app.services.llm.base import LLMProvider
-import json
-
-from pydantic import BaseModel
-
-# ... keep existing imports ...
-
 
 
 T = TypeVar("T", bound=BaseModel)
-
 
 class GroqLLMProvider(LLMProvider):
     def __init__(
@@ -59,34 +53,87 @@ class GroqLLMProvider(LLMProvider):
         *,
         system_prompt: str | None = None,
     ):
-        messages = []
+        import json
 
-        if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt,
-            })
+        schema = response_model.model_json_schema()
 
-        messages.append({
-            "role": "user",
-            "content": prompt,
-        })
+        system = system_prompt or ""
+        system += """
+    You are a structured data extraction engine.
+
+    You MUST return a valid JSON object.
+    Do not return markdown.
+    Do not return explanations.
+    Do not return an empty response.
+    Follow the provided JSON schema exactly.
+    """
+
+        user_prompt = f"""
+    {prompt}
+
+    Return ONLY valid JSON matching this schema:
+
+    {json.dumps(schema, indent=2)}
+
+    IMPORTANT:
+    - Output JSON only.
+    - No ```json fences.
+    - No explanation.
+    - Every required field must be present.
+    """
 
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=messages,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "prism_fact_graph",
-                    "strict": False,
-                    "schema": response_model.model_json_schema(),
+            messages=[
+                {
+                    "role": "system",
+                    "content": system,
                 },
-            },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+            temperature=0,
+            max_tokens=4096,
         )
 
-        raw_content = response.choices[0].message.content or "{}"
+        message = response.choices[0].message
+        raw_content = (message.content or "").strip()
 
-        return response_model.model_validate(
-            json.loads(raw_content)
-        )
+        # Some Groq models may return content through reasoning
+        # or refuse to provide the requested structured response.
+        if not raw_content:
+            raise ValueError(
+                "LLM returned empty structured output. "
+                f"finish_reason={response.choices[0].finish_reason}, "
+                f"model={self.model}"
+            )
+
+        # Remove markdown fences if the model ignores the instruction.
+        if raw_content.startswith("```"):
+            lines = raw_content.splitlines()
+
+            if lines and lines[0].strip().startswith("```"):
+                lines = lines[1:]
+
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+
+            raw_content = "\n".join(lines).strip()
+
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "LLM returned invalid JSON:\n"
+                f"{raw_content[:2000]}"
+            ) from exc
+
+        try:
+            return response_model.model_validate(parsed)
+        except Exception as exc:
+            raise ValueError(
+                "LLM JSON does not match the expected schema:\n"
+                f"{raw_content[:2000]}"
+            ) from exc

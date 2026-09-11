@@ -16,7 +16,11 @@ class RAGIndexer:
             collection_name
         )
 
-    def index(self, document: NormalizedDocument) -> None:
+    def index(
+            self,
+            document: NormalizedDocument,
+            source_id: str | None = None,
+        ) -> None:
         if not document.sections:
             return
 
@@ -28,18 +32,21 @@ class RAGIndexer:
         embeddings = self.embedding_provider.embed(contents)
 
         ids = [
-            section.section_id
+            f"{source_id}_{section.section_id}"
+            if source_id
+            else section.section_id
             for section in document.sections
         ]
 
         metadatas = [
             {
+                "source_id": source_id,
                 "source_reference": section.source_reference,
                 "source_type": document.source_type,
                 "title": document.title or "",
             }
             for section in document.sections
-        ]
+]
 
         self.collection.upsert(
             ids=ids,

@@ -108,7 +108,10 @@ def test_prism_langgraph_integration(db_session):
     # ---------------------------------------------------------
     # 5. Index document into RAG
     # ---------------------------------------------------------
-    indexer.index(document)
+    indexer.index(
+    document,
+    source_id=str(source.id),
+)
 
     # ---------------------------------------------------------
     # 6. Create KnowledgeService
@@ -264,7 +267,10 @@ def test_prism_generates_multiple_outputs(db_session):
         ],
     )
 
-    indexer.index(document)
+    indexer.index(
+    document,
+    source_id=str(source.id),
+)
 
     # ---------------------------------------------------------
     # 4. Knowledge Service

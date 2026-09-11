@@ -93,7 +93,10 @@ def main():
             vector_store=vector_store,
         )
 
-        indexer.index(document)
+        indexer.index(
+    document,
+    source_id=str(source.id),
+)
 
         retriever = ChromaRetriever(
             vector_store=vector_store,

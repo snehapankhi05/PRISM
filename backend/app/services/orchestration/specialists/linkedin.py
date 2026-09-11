@@ -1,29 +1,90 @@
-from backend.app.services.llm.base import LLMProvider
 from backend.app.services.orchestration.specialists.base import (
-    SpecialistAgent,
     SpecialistInput,
     SpecialistOutput,
 )
-from backend.app.services.orchestration.specialists.prompt_builder import (
-    SpecialistPromptBuilder,
+from backend.app.services.orchestration.specialists.utils import (
+    build_shared_context,
 )
+from backend.app.services.llm.base import LLMProvider
 
-class LinkedInSpecialist(SpecialistAgent):
+
+class LinkedInSpecialist:
     output_type = "linkedin"
 
     def __init__(self, provider: LLMProvider):
         self.provider = provider
 
-    def generate(self, input_data: SpecialistInput) -> SpecialistOutput:
-        prompt = self._build_prompt(input_data)
+    def generate(
+        self,
+        input_data: SpecialistInput,
+    ) -> SpecialistOutput:
+
+        prompt = f"""
+Create one polished LinkedIn post from the authoritative
+Fact Graph below.
+
+{build_shared_context(input_data)}
+
+PROFESSIONAL LINKEDIN FORMAT
+============================
+
+Use this structure:
+
+1. Opening hook
+2. Short context paragraph
+3. Key facts using readable bullet points where useful
+4. Response / action taken
+5. Closing statement
+6. Optional 2–4 relevant hashtags
+
+CONTENT RULES
+=============
+
+- Write like a professional organization communicating publicly.
+- Be factual, clear and confident.
+- Preserve every important number exactly.
+- Preserve dates and times exactly.
+- Never invent facts.
+- Never invent organizations.
+- Never invent people.
+- Never invent URLs.
+- Never invent email addresses.
+- Never invent remediation activities.
+- Never claim an investigation is happening unless supported.
+- Never claim "all necessary steps" unless supported.
+- Do not use Markdown tables.
+- Do not create a report.
+- Do not create an advisory.
+- Do not mention the Fact Graph.
+- Do not mention AI.
+- Do not mention these instructions.
+- Avoid generic corporate filler.
+- Avoid exaggerated marketing language.
+- Do not repeat the same fact multiple times.
+
+STYLE
+=====
+
+The result should sound like it was written by an experienced
+corporate communications professional.
+
+Use short paragraphs.
+
+Use bullets only when they improve readability.
+
+Keep the post approximately 150–300 words unless the
+source is too small to justify that length.
+
+Return ONLY the final LinkedIn post.
+""".strip()
 
         content = self.provider.generate(
             prompt,
             system_prompt=(
-                "You are PRISM's LinkedIn content specialist. "
-                "Create professional, factual LinkedIn content. "
-                "Use only information supported by the provided "
-                "knowledge context. Never invent facts."
+                "You are PRISM's professional LinkedIn "
+                "communications specialist. "
+                "Use only authoritative facts supplied in the prompt. "
+                "Never fabricate information."
             ),
         )
 
@@ -31,65 +92,8 @@ class LinkedInSpecialist(SpecialistAgent):
             output_type=self.output_type,
             content=content.strip(),
             metadata={
-                "specialist": self.__class__.__name__,
-            },
+            "specialist": "LinkedInSpecialist",
+            "format": "linkedin_post",
+            "professional_structure": True,
+        },
         )
-
-    @staticmethod
-    def _build_prompt(input_data: SpecialistInput) -> str:
-        controls = input_data.controls
-        knowledge = input_data.knowledge_context
-
-        facts = "\n".join(
-            (
-                f"- {fact.subject} | "
-                f"{fact.predicate} | "
-                f"{fact.object} "
-                f"(source: {fact.source_reference})"
-            )
-            for fact in knowledge.facts
-        )
-
-        evidence = "\n".join(
-            (
-                f"- {item.content} "
-                f"(source: {item.source_reference})"
-            )
-            for item in knowledge.evidence
-        )
-
-        return f"""
-Create a LinkedIn post using the following requirements.
-
-TARGET AUDIENCE:
-{controls.target_audience}
-
-TONE:
-{controls.tone}
-
-LANGUAGE:
-{controls.language}
-
-LEVEL OF DETAIL:
-{controls.level_of_detail}
-
-COMMUNICATION OBJECTIVE:
-{controls.communication_objective}
-
-CONTENT STYLE:
-{controls.content_style}
-
-FACT GRAPH:
-{facts}
-
-SOURCE EVIDENCE:
-{evidence}
-
-Rules:
-1. Use only supported facts.
-2. Do not invent numbers, dates, names, events, or claims.
-3. Preserve factual values exactly.
-4. Follow all requested controls.
-5. Do not mention the Fact Graph, RAG, or internal PRISM system.
-6. Return only the LinkedIn post.
-""".strip()

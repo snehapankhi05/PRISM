@@ -3,7 +3,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from backend.app.models import FactGraph
-from backend.app.schemas.fact_graph import FactGraphExtractionResult
 from backend.app.services.fact_graph.base import FactGraphExtractor
 from backend.app.services.fact_graph.repository import FactGraphRepository
 from backend.app.services.ingestion.document import NormalizedDocument
@@ -12,7 +11,7 @@ from backend.app.services.ingestion.document import NormalizedDocument
 class FactGraphService:
     def __init__(
         self,
-        extractor: FactGraphExtractionResult,
+        extractor: FactGraphExtractor,
         repository: FactGraphRepository,
     ):
         self.extractor = extractor
