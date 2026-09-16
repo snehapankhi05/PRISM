@@ -1,4 +1,3 @@
-````markdown
 # PRISM — GenAI Content Transformation Platform
 
 PRISM is a production-oriented GenAI content transformation platform that converts a single authoritative source into multiple communication formats while maintaining factual consistency across every generated output.
@@ -107,10 +106,7 @@ Instead of asking an LLM to independently generate every format from the origina
                     │ Rendering & Storage  │
                     │ PostgreSQL / Outputs │
                     └──────────────────────┘
-````
-
----
-
+                    
 ## 🔄 Transformation Pipeline
 
 PRISM follows a deterministic multi-stage pipeline:
