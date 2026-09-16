@@ -11,8 +11,6 @@ class AdvisorySpecialist:
         self.provider = provider
         self.output_type = "advisory"
 
-    def generate(self, input_data: SpecialistInput) -> SpecialistOutput:
-        ...
 
     def generate(self, input_data: SpecialistInput) -> SpecialistOutput:
         context = build_shared_context(input_data)

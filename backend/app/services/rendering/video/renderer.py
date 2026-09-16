@@ -15,9 +15,9 @@ class VideoRenderer(Renderer):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         scenes_dir = output_dir / "scenes"
-        scenes_dir.mkdir(exist_ok=True)
+        scenes_dir.mkdir(parents=True, exist_ok=True)
 
-        scene_files = []
+        scene_files: list[str] = []
 
         for scene in content.scenes:
             scene_file = scenes_dir / f"scene_{scene.scene_number}.txt"
@@ -25,10 +25,23 @@ class VideoRenderer(Renderer):
             scene_file.write_text(
                 "\n".join(
                     [
+                        f"SCENE: {scene.scene_number}",
+                        f"DURATION: {scene.duration_seconds}s",
                         f"TITLE: {scene.title}",
-                        f"ON SCREEN: {scene.on_screen_text}",
+                        "",
+                        f"VIDEO PROMPT: {scene.video_prompt}",
+                        "",
+                        f"CHARACTER: {scene.character_description}",
+                        f"ENVIRONMENT: {scene.environment}",
+                        f"CAMERA: {scene.camera_direction}",
+                        f"ACTION: {scene.action}",
+                        "",
+                        f"ON-SCREEN TEXT: {scene.on_screen_text}",
+                        "",
                         f"NARRATION: {scene.narration}",
-                        f"VISUAL: {scene.visual_direction}",
+                        "",
+                        f"NEGATIVE PROMPT: {scene.negative_prompt}",
+                        "",
                         (
                             "SOURCES: "
                             + ", ".join(scene.source_references)
@@ -46,6 +59,8 @@ class VideoRenderer(Renderer):
             "\n".join(
                 [
                     f"TITLE: {content.title}",
+                    f"DESCRIPTION: {content.description}",
+                    f"TOTAL DURATION: {content.total_duration_seconds}s",
                     f"SCENES: {len(content.scenes)}",
                     "",
                     *scene_files,
@@ -60,6 +75,7 @@ class VideoRenderer(Renderer):
             mime_type="text/plain",
             metadata={
                 "scene_count": len(content.scenes),
+                "total_duration_seconds": content.total_duration_seconds,
                 "render_mode": "presentation_manifest",
             },
         )

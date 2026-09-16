@@ -1,7 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import "./index.css";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -74,15 +72,15 @@ function App() {
   const [results, setResults] = useState(null);
   const [activeOutput, setActiveOutput] = useState("linkedin");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const generatedOutputs = results?.outputs || {};
+
   const availableOutputIds = Object.keys(generatedOutputs);
 
   const active =
     outputs.find((item) => item.id === activeOutput) ||
-    outputs.find((item) =>
-      availableOutputIds.includes(item.id)
-    ) ||
+    outputs.find((item) => availableOutputIds.includes(item.id)) ||
     outputs[0];
 
   const handleGenerate = async () => {
@@ -122,15 +120,7 @@ function App() {
         }),
       });
 
-      let data = null;
-
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error(
-          "The PRISM backend returned an invalid response."
-        );
-      }
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -145,6 +135,7 @@ function App() {
 
       if (firstGeneratedOutput) {
         setActiveOutput(firstGeneratedOutput);
+        setActiveSlide(0);
       }
 
       setPage("results");
@@ -208,6 +199,8 @@ function App() {
       active={active}
       activeOutput={activeOutput}
       setActiveOutput={setActiveOutput}
+      activeSlide={activeSlide}
+      setActiveSlide={setActiveSlide}
       onWorkspace={() => setPage("workspace")}
       onHistory={() =>
         alert("History will be connected later.")
@@ -217,9 +210,9 @@ function App() {
   );
 }
 
-/* =========================================================
+/* =========================
    LANDING
-========================================================= */
+========================= */
 
 function Landing({ onStart }) {
   return (
@@ -263,7 +256,6 @@ function Landing({ onStart }) {
           <button
             className="primary-button"
             onClick={onStart}
-            type="button"
           >
             Create New Transformation
             <span>→</span>
@@ -326,9 +318,9 @@ function Landing({ onStart }) {
   );
 }
 
-/* =========================================================
+/* =========================
    WORKSPACE
-========================================================= */
+========================= */
 
 function Workspace({
   source,
@@ -666,7 +658,6 @@ function Workspace({
               selectedOutputs.length === 0
             }
             onClick={onGenerate}
-            type="button"
           >
             {isGenerating
               ? "Generating..."
@@ -680,9 +671,9 @@ function Workspace({
   );
 }
 
-/* =========================================================
+/* =========================
    RESULTS
-========================================================= */
+========================= */
 
 function Results({
   results,
@@ -690,6 +681,8 @@ function Results({
   active,
   activeOutput,
   setActiveOutput,
+  activeSlide,
+  setActiveSlide,
   onWorkspace,
   onHistory,
   onNew,
@@ -704,14 +697,27 @@ function Results({
   const guardrail =
     results?.guardrails?.[activeOutput];
 
-  const renderContentForCopy = () => {
-    return serializeContent(activeContent);
+  const presentationUrl =
+    results?.job_id && activeOutput === "presentation"
+      ? `${API_URL}/outputs/${results.job_id}/presentation/presentation.pptx`
+      : null;
+
+  const renderContent = () => {
+    if (activeContent === null || activeContent === undefined) {
+      return "No content generated.";
+    }
+
+    if (typeof activeContent === "string") {
+      return activeContent;
+    }
+
+    return JSON.stringify(activeContent, null, 2);
   };
 
   const copyContent = async () => {
     try {
       await navigator.clipboard.writeText(
-        renderContentForCopy()
+        renderContent()
       );
 
       alert("Content copied.");
@@ -728,7 +734,6 @@ function Results({
         onWorkspace={onWorkspace}
         onResults={() => {}}
         onHistory={onHistory}
-        onLogo={onWorkspace}
       />
 
       <main className="results-main">
@@ -791,9 +796,10 @@ function Results({
                         ? "active"
                         : ""
                     }`}
-                    onClick={() =>
-                      setActiveOutput(output.id)
-                    }
+                    onClick={() => {
+                      setActiveOutput(output.id);
+                      setActiveSlide(0);
+                    }}
                   >
                     <span className="result-icon">
                       {output.icon}
@@ -841,17 +847,26 @@ function Results({
                   Copy
                 </button>
 
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() =>
-                    alert(
-                      "Export will be connected to the rendering assets next."
-                    )
-                  }
-                >
-                  Export
-                </button>
+                {presentationUrl ? (
+                  <a
+                    className="secondary-button"
+                    href={presentationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    download="presentation.pptx"
+                    style={{ textDecoration: "none" }}
+                  >
+                    Open / Download PPT
+                  </a>
+                ) : (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={copyContent}
+                  >
+                    Export
+                  </button>
+                )}
 
                 <button
                   className="post-button"
@@ -867,13 +882,276 @@ function Results({
             <div
               className={`content-preview ${active.type}`}
             >
-              <OutputRenderer
-                outputType={activeOutput}
-                content={activeContent}
-              />
+              {activeOutput === "presentation" ? (
+                (() => {
+                  const slides = Array.isArray(activeContent?.slides)
+                    ? activeContent.slides
+                    : [];
+
+                  if (slides.length === 0) {
+                    return (
+                      <div
+                        className="visual-placeholder"
+                        style={{ gap: "12px" }}
+                      >
+                        <span>{active.icon}</span>
+                        <strong>{active.name}</strong>
+                        <small>
+                          Presentation generated successfully.
+                        </small>
+                        {presentationUrl && (
+                          <a
+                            className="primary-button"
+                            href={presentationUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            download="presentation.pptx"
+                            style={{
+                              textDecoration: "none",
+                              marginTop: "8px",
+                            }}
+                          >
+                            Open / Download PowerPoint →
+                          </a>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const slideIndex = Math.min(
+                    activeSlide,
+                    slides.length - 1
+                  );
+                  const slide = slides[slideIndex];
+
+                  return (
+                    <div
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "18px",
+                      }}
+                    >
+                      {/* PPT SLIDE PREVIEW */}
+                      <div
+                        style={{
+                          width: "min(900px, 100%)",
+                          aspectRatio: "16 / 9",
+                          background: "#ffffff",
+                          border: "1px solid #dfe4ef",
+                          borderRadius: "16px",
+                          boxShadow:
+                            "0 18px 50px rgba(20, 30, 60, 0.12)",
+                          padding: "42px 52px",
+                          boxSizing: "border-box",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          overflow: "hidden",
+                          textAlign: "left",
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              letterSpacing: "0.16em",
+                              textTransform: "uppercase",
+                              color: "#63708a",
+                              marginBottom: "18px",
+                            }}
+                          >
+                            PRISM · PRESENTATION
+                          </div>
+
+                          <h3
+                            style={{
+                              margin: 0,
+                              fontSize: "clamp(28px, 4vw, 48px)",
+                              lineHeight: 1.08,
+                              color: "#121a2b",
+                            }}
+                          >
+                            {slide.title}
+                          </h3>
+
+                          {slide.subtitle && (
+                            <p
+                              style={{
+                                margin: "12px 0 0",
+                                fontSize: "18px",
+                                lineHeight: 1.4,
+                                color: "#63708a",
+                              }}
+                            >
+                              {slide.subtitle}
+                            </p>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "14px",
+                          }}
+                        >
+                          {(slide.content || []).map(
+                            (item, index) => (
+                              <div
+                                key={index}
+                                style={{
+                                  display: "flex",
+                                  gap: "12px",
+                                  alignItems: "flex-start",
+                                  color: "#273149",
+                                  fontSize: "17px",
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    flex: "0 0 auto",
+                                    width: "8px",
+                                    height: "8px",
+                                    borderRadius: "50%",
+                                    background: "#5267ff",
+                                    marginTop: "8px",
+                                  }}
+                                />
+                                <span>{item}</span>
+                              </div>
+                            )
+                          )}
+
+                          {slide.key_stat && (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "12px 16px",
+                                borderRadius: "10px",
+                                background: "#f3f5ff",
+                                fontWeight: 700,
+                                color: "#2638c9",
+                              }}
+                            >
+                              {slide.key_stat}
+                            </div>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            borderTop: "1px solid #e7eaf1",
+                            paddingTop: "12px",
+                            fontSize: "11px",
+                            color: "#7a8498",
+                          }}
+                        >
+                          <span>
+                            {activeContent.title || "PRISM"}
+                          </span>
+
+                          <span>
+                            Slide {slideIndex + 1} / {slides.length}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* SLIDE NAVIGATION */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "12px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={slideIndex === 0}
+                          onClick={() =>
+                            setActiveSlide((current) =>
+                              Math.max(current - 1, 0)
+                            )
+                          }
+                        >
+                          ← Previous
+                        </button>
+
+                        <span
+                          style={{
+                            minWidth: "100px",
+                            textAlign: "center",
+                            fontSize: "14px",
+                            color: "#63708a",
+                          }}
+                        >
+                          Slide {slideIndex + 1} of {slides.length}
+                        </span>
+
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={
+                            slideIndex === slides.length - 1
+                          }
+                          onClick={() =>
+                            setActiveSlide((current) =>
+                              Math.min(
+                                current + 1,
+                                slides.length - 1
+                              )
+                            )
+                          }
+                        >
+                          Next →
+                        </button>
+                      </div>
+
+                      {presentationUrl && (
+                        <a
+                          className="primary-button"
+                          href={presentationUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          download="presentation.pptx"
+                          style={{ textDecoration: "none" }}
+                        >
+                          Open / Download PowerPoint →
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : active.type === "visual" ? (
+                <div className="visual-placeholder">
+                  <span>{active.icon}</span>
+                  <strong>{active.name}</strong>
+                  <small>Rendered asset preview</small>
+                </div>
+              ) : (
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "inherit",
+                    margin: 0,
+                  }}
+                >
+                  {renderContent()}
+                </pre>
+              )}
             </div>
 
-            {/* PROVENANCE / GUARDRAIL */}
+            {/* GUARDRAIL */}
 
             <div className="provenance-panel">
               <div className="provenance-title">
@@ -970,811 +1248,9 @@ function Results({
   );
 }
 
-/* =========================================================
-   OUTPUT RENDERER
-========================================================= */
-
-function OutputRenderer({
-  outputType,
-  content,
-}) {
-  if (
-    content === null ||
-    content === undefined ||
-    content === ""
-  ) {
-    return (
-      <div className="empty-output">
-        <strong>No content generated.</strong>
-        <span>
-          PRISM did not return content for this output.
-        </span>
-      </div>
-    );
-  }
-
-  /*
-   * Text specialists return strings.
-   *
-   * ReactMarkdown + remarkGfm renders:
-   * - bold
-   * - headings
-   * - lists
-   * - tables
-   * - links
-   * - blockquotes
-   */
-  if (typeof content === "string") {
-    return (
-      <article className="markdown-output">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            a: ({ node, ...props }) => (
-              <a
-                {...props}
-                target="_blank"
-                rel="noopener noreferrer"
-              />
-            ),
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </article>
-    );
-  }
-
-  /*
-   * Structured output rendering.
-   */
-  switch (outputType) {
-    case "presentation":
-      return (
-        <PresentationRenderer content={content} />
-      );
-
-    case "infographic":
-      return (
-        <InfographicRenderer content={content} />
-      );
-
-    case "video":
-      return <VideoRenderer content={content} />;
-
-    case "executive_summary":
-      return (
-        <ExecutiveSummaryRenderer
-          content={content}
-        />
-      );
-
-    default:
-      return (
-        <article className="markdown-output">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {JSON.stringify(content, null, 2)}
-          </ReactMarkdown>
-        </article>
-      );
-  }
-}
-
-/* =========================================================
-   PRESENTATION
-========================================================= */
-
-function PresentationRenderer({ content }) {
-  const slides = Array.isArray(content?.slides)
-    ? content.slides
-    : [];
-
-  return (
-    <div className="presentation-preview">
-      <div className="presentation-header">
-        <div>
-          <span className="structured-label">
-            PRESENTATION
-          </span>
-
-          <h3>{content?.title || "Presentation"}</h3>
-
-          {content?.subtitle && (
-            <p>{content.subtitle}</p>
-          )}
-        </div>
-
-        {content?.audience && (
-          <span className="structured-badge">
-            {content.audience}
-          </span>
-        )}
-      </div>
-
-      <div className="slide-list">
-        {slides.map((slide, index) => (
-          <article
-            className="presentation-slide"
-            key={
-              slide.slide_number ??
-              `slide-${index}`
-            }
-          >
-            <div className="slide-number">
-              {String(
-                slide.slide_number ?? index + 1
-              ).padStart(2, "0")}
-            </div>
-
-            <div className="slide-body">
-              <h4>{slide.title}</h4>
-
-              {slide.subtitle && (
-                <p className="slide-subtitle">
-                  {slide.subtitle}
-                </p>
-              )}
-
-              {slide.key_stat && (
-                <div className="slide-stat">
-                  {slide.key_stat}
-                </div>
-              )}
-
-              <ul>
-                {(slide.content || []).map(
-                  (point, pointIndex) => (
-                    <li key={pointIndex}>
-                      {point}
-                    </li>
-                  )
-                )}
-              </ul>
-
-              {slide.speaker_notes && (
-                <details className="speaker-notes">
-                  <summary>
-                    Speaker notes
-                  </summary>
-
-                  <p>{slide.speaker_notes}</p>
-                </details>
-              )}
-
-              {slide.source_references?.length > 0 && (
-                <div className="source-references">
-                  Source:{" "}
-                  {slide.source_references.join(", ")}
-                </div>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   INFOGRAPHIC
-========================================================= */
-
-function InfographicRenderer({ content }) {
-  const metrics = Array.isArray(
-    content?.headline_metrics
-  )
-    ? content.headline_metrics
-    : [];
-
-  const timeline = Array.isArray(content?.timeline)
-    ? content.timeline
-    : [];
-
-  const sections = Array.isArray(content?.sections)
-    ? content.sections
-    : [];
-
-  return (
-    <div className="infographic-preview">
-      <div className="infographic-header">
-        <span className="structured-label">
-          INFOGRAPHIC
-        </span>
-
-        <h3>{content?.title || "Infographic"}</h3>
-
-        {content?.subtitle && (
-          <p>{content.subtitle}</p>
-        )}
-      </div>
-
-      {metrics.length > 0 && (
-        <section className="metric-grid">
-          {metrics.map((metric, index) => (
-            <article
-              className="metric-card"
-              key={`${metric.label}-${index}`}
-            >
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-
-              {metric.explanation && (
-                <small>
-                  {metric.explanation}
-                </small>
-              )}
-            </article>
-          ))}
-        </section>
-      )}
-
-      {timeline.length > 0 && (
-        <section className="timeline-section">
-          <div className="structured-section-heading">
-            <span>Timeline</span>
-          </div>
-
-          <div className="timeline">
-            {timeline.map((item, index) => (
-              <div
-                className="timeline-item"
-                key={`${item.time}-${index}`}
-              >
-                <div className="timeline-marker">
-                  {index + 1}
-                </div>
-
-                <div>
-                  <strong>{item.time}</strong>
-                  <p>{item.event}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="infographic-sections">
-        {sections.map((section, index) => (
-          <article
-            className="info-section"
-            key={`${section.heading}-${index}`}
-          >
-            <h4>{section.heading}</h4>
-
-            <ul>
-              {(section.key_points || []).map(
-                (point, pointIndex) => (
-                  <li key={pointIndex}>
-                    {point}
-                  </li>
-                )
-              )}
-            </ul>
-          </article>
-        ))}
-      </section>
-
-      {content?.footer_note && (
-        <div className="infographic-footer">
-          {content.footer_note}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* =========================================================
-   VIDEO
-========================================================= */
-
-function VideoRenderer({ content }) {
-  const scenes = Array.isArray(content?.scenes)
-    ? content.scenes
-    : [];
-
-  const totalDuration = Number(
-    content?.total_duration_seconds || 0
-  );
-
-  const totalMinutes = Math.floor(totalDuration / 60);
-  const totalSeconds = totalDuration % 60;
-
-  const formattedDuration =
-    totalMinutes > 0
-      ? `${String(totalMinutes).padStart(2, "0")}:${String(
-          totalSeconds
-        ).padStart(2, "0")}`
-      : `00:${String(totalSeconds).padStart(2, "0")}`;
-
-  return (
-    <div className="video-production-preview">
-
-      {/* =====================================================
-          VIDEO HEADER
-      ===================================================== */}
-
-      <div className="video-production-header">
-        <div className="video-title-block">
-          <div className="video-kicker">
-            <span className="video-live-dot" />
-            AI VIDEO STORYBOARD
-          </div>
-
-          <h3>
-            {content?.title || "Untitled Video"}
-          </h3>
-
-          {content?.description && (
-            <p>{content.description}</p>
-          )}
-        </div>
-
-        <div className="video-duration-card">
-          <span>Total duration</span>
-          <strong>{formattedDuration}</strong>
-          <small>
-            {scenes.length} scenes
-          </small>
-        </div>
-      </div>
-
-      {/* =====================================================
-          STORYBOARD TIMELINE
-      ===================================================== */}
-
-      <div className="video-timeline">
-        {scenes.map((scene, index) => (
-          <div
-            className="video-timeline-item"
-            key={
-              scene.scene_number ??
-              `scene-${index}`
-            }
-          >
-            <div
-              className={`video-timeline-node ${
-                index === 0 ? "active" : ""
-              }`}
-            >
-              {String(
-                scene.scene_number ??
-                  index + 1
-              ).padStart(2, "0")}
-            </div>
-
-            {index < scenes.length - 1 && (
-              <div className="video-timeline-line" />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* =====================================================
-          SCENES
-      ===================================================== */}
-
-      <div className="video-scenes">
-
-        {scenes.map((scene, index) => {
-          const sceneNumber =
-            scene.scene_number ?? index + 1;
-
-          const duration =
-            Number(scene.duration_seconds) || 0;
-
-          return (
-            <article
-              className="video-production-scene"
-              key={sceneNumber}
-            >
-
-              {/* ---------------------------------------------
-                  SCENE TOP
-              --------------------------------------------- */}
-
-              <div className="video-scene-header">
-
-                <div className="video-scene-number">
-                  <span>
-                    SCENE
-                  </span>
-
-                  <strong>
-                    {String(sceneNumber).padStart(
-                      2,
-                      "0"
-                    )}
-                  </strong>
-                </div>
-
-                <div className="video-scene-heading">
-                  <h4>
-                    {scene.title}
-                  </h4>
-
-                  <span>
-                    Production sequence · Scene{" "}
-                    {sceneNumber}
-                  </span>
-                </div>
-
-                <div className="video-scene-duration">
-                  <span>Duration</span>
-                  <strong>
-                    {String(
-                      Math.floor(duration / 60)
-                    ).padStart(2, "0")}
-                    :
-                    {String(
-                      duration % 60
-                    ).padStart(2, "0")}
-                  </strong>
-                </div>
-
-              </div>
-
-              {/* ---------------------------------------------
-                  VISUAL PREVIEW + CORE INFORMATION
-              --------------------------------------------- */}
-
-              <div className="video-scene-main">
-
-                <div className="video-visual-frame">
-
-                  <div className="video-frame-grid" />
-
-                  <div className="video-frame-content">
-
-                    <div className="video-frame-play">
-                      ▶
-                    </div>
-
-                    <span>
-                      SCENE {String(
-                        sceneNumber
-                      ).padStart(2, "0")}
-                    </span>
-
-                    <strong>
-                      {scene.on_screen_text ||
-                        scene.title}
-                    </strong>
-
-                  </div>
-
-                  <div className="video-frame-footer">
-                    <span>
-                      PRISM VISUAL PREVIEW
-                    </span>
-
-                    <span>
-                      {duration}s
-                    </span>
-                  </div>
-                </div>
-
-                <div className="video-scene-information">
-
-                  {/* ON SCREEN TEXT */}
-
-                  {scene.on_screen_text && (
-                    <div className="video-info-block featured">
-                      <div className="video-info-label">
-                        <span>01</span>
-                        ON-SCREEN TEXT
-                      </div>
-
-                      <div className="video-onscreen-text">
-                        {scene.on_screen_text}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* NARRATION */}
-
-                  {scene.narration && (
-                    <div className="video-info-block">
-                      <div className="video-info-label">
-                        <span>02</span>
-                        NARRATION
-                      </div>
-
-                      <p className="video-narration">
-                        {scene.narration}
-                      </p>
-                    </div>
-                  )}
-
-                </div>
-              </div>
-
-              {/* ---------------------------------------------
-                  PRODUCTION DETAILS
-              --------------------------------------------- */}
-
-              <div className="video-production-details">
-
-                <VideoProductionDetail
-                  number="03"
-                  label="Visual direction"
-                  value={scene.video_prompt}
-                />
-
-                <VideoProductionDetail
-                  number="04"
-                  label="Character"
-                  value={scene.character_description}
-                />
-
-                <VideoProductionDetail
-                  number="05"
-                  label="Environment"
-                  value={scene.environment}
-                />
-
-                <VideoProductionDetail
-                  number="06"
-                  label="Camera"
-                  value={scene.camera_direction}
-                />
-
-                <VideoProductionDetail
-                  number="07"
-                  label="Action"
-                  value={scene.action}
-                />
-
-                <VideoProductionDetail
-                  number="08"
-                  label="Negative prompt"
-                  value={scene.negative_prompt}
-                />
-
-              </div>
-
-              {/* ---------------------------------------------
-                  SOURCE
-              --------------------------------------------- */}
-
-              {scene.source_references?.length > 0 && (
-                <div className="video-source-row">
-                  <span>
-                    SOURCE REFERENCE
-                  </span>
-
-                  <div>
-                    {scene.source_references.map(
-                      (reference) => (
-                        <span
-                          key={reference}
-                          className="video-source-chip"
-                        >
-                          {reference}
-                        </span>
-                      )
-                    )}
-                  </div>
-                </div>
-              )}
-
-            </article>
-          );
-        })}
-
-      </div>
-
-      {/* =====================================================
-          PRODUCTION FOOTER
-      ===================================================== */}
-
-      <div className="video-production-footer">
-
-        <div>
-          <span className="video-footer-icon">
-            ✓
-          </span>
-
-          <div>
-            <strong>
-              Storyboard ready
-            </strong>
-
-            <small>
-              All scenes are grounded in the
-              verified Fact Graph.
-            </small>
-          </div>
-        </div>
-
-        <span className="video-footer-status">
-          {scenes.length} scenes ·{" "}
-          {formattedDuration}
-        </span>
-
-      </div>
-    </div>
-  );
-}
-function VideoProductionDetail({
-  number,
-  label,
-  value,
-}) {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <div className="video-production-detail">
-
-      <div className="video-detail-label">
-        <span>{number}</span>
-        {label}
-      </div>
-
-      <p>{value}</p>
-
-    </div>
-  );
-}
-
-function SceneField({ label, value }) {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <div className="scene-field">
-      <span>{label}</span>
-      <p>{value}</p>
-    </div>
-  );
-}
-
-/* =========================================================
-   EXECUTIVE SUMMARY
-========================================================= */
-
-function ExecutiveSummaryRenderer({
-  content,
-}) {
-  const findings = Array.isArray(
-    content?.key_findings
-  )
-    ? content.key_findings
-    : [];
-
-  const response = Array.isArray(
-    content?.response
-  )
-    ? content.response
-    : [];
-
-  const recommendations = Array.isArray(
-    content?.recommendations
-  )
-    ? content.recommendations
-    : [];
-
-  return (
-    <div className="executive-summary-preview">
-      <div className="executive-header">
-        <span className="structured-label">
-          EXECUTIVE SUMMARY
-        </span>
-
-        <h3>
-          {content?.title ||
-            "Executive Summary"}
-        </h3>
-      </div>
-
-      {content?.overview && (
-        <section className="executive-section overview">
-          <span>Overview</span>
-          <p>{content.overview}</p>
-        </section>
-      )}
-
-      {findings.length > 0 && (
-        <ExecutiveListSection
-          title="Key findings"
-          items={findings}
-        />
-      )}
-
-      {content?.impact && (
-        <section className="executive-section">
-          <span>Impact</span>
-          <p>{content.impact}</p>
-        </section>
-      )}
-
-      {response.length > 0 && (
-        <ExecutiveListSection
-          title="Response"
-          items={response}
-        />
-      )}
-
-      {recommendations.length > 0 && (
-        <ExecutiveListSection
-          title="Recommendations"
-          items={recommendations}
-        />
-      )}
-
-      {content?.source_references?.length > 0 && (
-        <div className="source-references">
-          Source:{" "}
-          {content.source_references.join(", ")}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ExecutiveListSection({
-  title,
-  items,
-}) {
-  return (
-    <section className="executive-section">
-      <span>{title}</span>
-
-      <ul>
-        {items.map((item, index) => (
-          <li key={index}>{item}</li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/* =========================================================
-   CONTENT SERIALIZATION
-========================================================= */
-
-function serializeContent(content) {
-  if (
-    content === null ||
-    content === undefined
-  ) {
-    return "";
-  }
-
-  if (typeof content === "string") {
-    return content;
-  }
-
-  return JSON.stringify(content, null, 2);
-}
-
-/* =========================================================
-   HELPERS
-========================================================= */
-
-function formatDuration(seconds) {
-  const value = Number(seconds);
-
-  if (!Number.isFinite(value)) {
-    return "";
-  }
-
-  const minutes = Math.floor(value / 60);
-  const remainingSeconds = value % 60;
-
-  if (minutes === 0) {
-    return `${remainingSeconds}s`;
-  }
-
-  return `${minutes}m ${remainingSeconds}s`;
-}
-
-/* =========================================================
+/* =========================
    HEADER
-========================================================= */
+========================= */
 
 function AppHeader({
   active,

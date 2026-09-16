@@ -6,7 +6,7 @@ from backend.app.services.orchestration.runtime import PRISMRuntime
 from backend.app.services.orchestration.state import PRISMState
 from backend.app.services.orchestration.generation import generation_node
 from backend.app.services.orchestration.guardrails import guardrails_node
-
+from backend.app.services.orchestration.rendering import rendering_node
 def prepare_node(state: PRISMState) -> PRISMState:
     return state
 
@@ -34,6 +34,7 @@ def build_prism_graph(runtime: PRISMRuntime):
             provenance_service=runtime.provenance_service,
             db=runtime.db,
         )
+    
     def guardrails(state: PRISMState) -> PRISMState:
         return guardrails_node(
             state,
@@ -42,6 +43,12 @@ def build_prism_graph(runtime: PRISMRuntime):
             llm_guardrail=runtime.llm_guardrail,
             revision_service=runtime.revision_service,
         )
+    def rendering(state: PRISMState) -> PRISMState:
+        return rendering_node(
+            state,
+            renderer_registry=runtime.renderer_registry,
+            output_root=runtime.output_root,
+        )
     graph = StateGraph(PRISMState)
 
     graph.add_node("prepare", prepare_node)
@@ -49,12 +56,14 @@ def build_prism_graph(runtime: PRISMRuntime):
     graph.add_node("controls", controls)
     graph.add_node("generation", generation)
     graph.add_node("guardrails", guardrails)
+    graph.add_node("rendering", rendering)
     graph.set_entry_point("prepare")
 
     graph.add_edge("prepare", "knowledge")
     graph.add_edge("knowledge", "controls")
     graph.add_edge("controls", "generation")
     graph.add_edge("generation", "guardrails")
-    graph.add_edge("guardrails", END)
+    graph.add_edge("guardrails", "rendering")
+    graph.add_edge("rendering", END)
 
     return graph.compile()

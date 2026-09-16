@@ -9,6 +9,7 @@ from backend.app.services.llm.base import LLMProvider
 
 T = TypeVar("T", bound=BaseModel)
 
+
 class GroqLLMProvider(LLMProvider):
     def __init__(
         self,
@@ -17,7 +18,6 @@ class GroqLLMProvider(LLMProvider):
     ):
         self.client = Groq(api_key=api_key)
         self.model = model
-        
 
     def generate(
         self,
@@ -28,15 +28,19 @@ class GroqLLMProvider(LLMProvider):
         messages = []
 
         if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt,
-            })
+            messages.append(
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                }
+            )
 
-        messages.append({
-            "role": "user",
-            "content": prompt,
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
 
         response = self.client.chat.completions.create(
             model=self.model,
@@ -45,7 +49,6 @@ class GroqLLMProvider(LLMProvider):
 
         return response.choices[0].message.content or ""
 
-   
     def generate_structured(
         self,
         prompt: str,
@@ -53,34 +56,44 @@ class GroqLLMProvider(LLMProvider):
         *,
         system_prompt: str | None = None,
     ):
-        import json
-
         schema = response_model.model_json_schema()
 
         system = system_prompt or ""
-        system += """
-    You are a structured data extraction engine.
 
-    You MUST return a valid JSON object.
-    Do not return markdown.
-    Do not return explanations.
-    Do not return an empty response.
-    Follow the provided JSON schema exactly.
-    """
+        system += """
+You are a structured data extraction engine.
+
+You MUST return a valid JSON object.
+
+Rules:
+- Return JSON only.
+- Do not return markdown.
+- Do not return ```json fences.
+- Do not return explanations.
+- Do not return an empty response.
+- Follow the provided JSON schema exactly.
+- Every required field must be present.
+- Keep strings concise.
+- Do not add unnecessary details.
+- Use only information supported by the provided source.
+"""
 
         user_prompt = f"""
-    {prompt}
+{prompt}
 
-    Return ONLY valid JSON matching this schema:
+Return ONLY valid JSON matching this schema:
 
-    {json.dumps(schema, indent=2)}
+{json.dumps(schema, indent=2)}
 
-    IMPORTANT:
-    - Output JSON only.
-    - No ```json fences.
-    - No explanation.
-    - Every required field must be present.
-    """
+IMPORTANT:
+- Output JSON only.
+- No markdown.
+- No ```json fences.
+- No explanation.
+- Every required field must be present.
+- Keep strings concise.
+- Do not add unnecessary details.
+"""
 
         response = self.client.chat.completions.create(
             model=self.model,
@@ -95,18 +108,18 @@ class GroqLLMProvider(LLMProvider):
                 },
             ],
             temperature=0,
-            max_tokens=4096,
+            max_tokens=8192,
         )
 
-        message = response.choices[0].message
+        choice = response.choices[0]
+        message = choice.message
+
         raw_content = (message.content or "").strip()
 
-        # Some Groq models may return content through reasoning
-        # or refuse to provide the requested structured response.
         if not raw_content:
             raise ValueError(
                 "LLM returned empty structured output. "
-                f"finish_reason={response.choices[0].finish_reason}, "
+                f"finish_reason={choice.finish_reason}, "
                 f"model={self.model}"
             )
 
@@ -122,16 +135,22 @@ class GroqLLMProvider(LLMProvider):
 
             raw_content = "\n".join(lines).strip()
 
+        # Parse JSON.
         try:
             parsed = json.loads(raw_content)
+
         except json.JSONDecodeError as exc:
             raise ValueError(
-                "LLM returned invalid JSON:\n"
+                "LLM returned invalid JSON. "
+                f"finish_reason={choice.finish_reason}, "
+                f"model={self.model}\n"
                 f"{raw_content[:2000]}"
             ) from exc
 
+        # Validate against the Pydantic response model.
         try:
             return response_model.model_validate(parsed)
+
         except Exception as exc:
             raise ValueError(
                 "LLM JSON does not match the expected schema:\n"
